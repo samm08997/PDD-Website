@@ -6,6 +6,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
-export interface HealthStatus {
-  status: string;
+export interface GenerateFlashcardsBody {
+  /** The lecture notes or text to generate flashcards from */
+  text: string;
 }
