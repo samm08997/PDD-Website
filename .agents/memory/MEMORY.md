@@ -1,0 +1,2 @@
+- [Orval codegen barrel conflict](orval-barrel-conflict.md) — codegen regenerates lib/api-zod/src/index.ts with duplicate exports; must overwrite it immediately after every codegen run.
+- [Gemini AI Integration unavailable](gemini-integration-status.md) — Replit AI Integrations for Gemini returned "awaiting_account_upgrade"; use user's own GEMINI_API_KEY with @google/generative-ai SDK instead.
