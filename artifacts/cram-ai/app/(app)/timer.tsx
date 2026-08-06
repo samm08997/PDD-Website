@@ -30,7 +30,7 @@ export default function TimerScreen() {
   const { logProgress } = useAchievements();
 
   useEffect(() => {
-    let interval: ReturnType<typeof setTimeout>;
+    let interval: NodeJS.Timeout;
     if (isActive && timeLeft > 0) {
       interval = setInterval(() => {
         setTimeLeft((prev) => prev - 1);

@@ -1,0 +1,66 @@
+name: E2E and Performance Test Suite
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+  workflow_dispatch: # Allows manual trigger from GitHub UI
+
+jobs:
+  run-automated-tests:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 8
+
+      # 1. Setup E2E Testing Directory
+      - name: Install E2E Web Dependencies
+        working-directory: ./e2e-tests
+        run: pnpm install
+
+      # 2. Setup Mobile Appium Directory
+      - name: Install Mobile Appium Dependencies
+        working-directory: ./artifacts/cram-ai/appium-tests
+        run: pnpm install
+
+      # 3. Execute Selenium Web Tests
+      - name: Run Selenium Web Tests
+        working-directory: ./e2e-tests
+        continue-on-error: true # Prevents pipeline from stopping if a test fails
+        run: npm run test:web
+
+      # 4. Execute Load Test (Autocannon)
+      - name: Run Load Testing
+        working-directory: ./e2e-tests
+        continue-on-error: true
+        run: node scripts/load-test.js
+
+      # 5. Execute Comprehensive Appium Mobile Tests
+      - name: Run Appium Mobile Screen Tests
+        working-directory: ./artifacts/cram-ai/appium-tests
+        continue-on-error: true
+        run: npx mocha tests/mobile_screens.spec.js
+
+      # 6. Upload All Test Reports as GitHub Artifacts
+      - name: Upload Test Reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: all-test-reports
+          path: |
+            e2e-tests/reports/*.xlsx
+            e2e-tests/reports/*.html
+            e2e-tests/reports/*.json
+            artifacts/cram-ai/appium-tests/reports/*.xlsx
+          retention-days: 14

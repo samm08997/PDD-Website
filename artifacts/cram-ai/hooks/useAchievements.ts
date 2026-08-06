@@ -14,7 +14,6 @@ export type UserProgress = {
   total_decks_created: number;
   subjects_studied: string[];
   on_time_tasks: number;
-  updated_at?: string;
 };
 
 export type BadgeDefinition = {

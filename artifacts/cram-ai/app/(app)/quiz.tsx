@@ -194,8 +194,8 @@ export default function QuizScreen() {
                 const isCorrect = idx === currentQ.correctIndex;
                 const showStatus = selectedOption !== null;
 
-                let optionStyle: any = styles.optionBtn;
-                let textStyle: any = styles.optionText;
+                let optionStyle = styles.optionBtn;
+                let textStyle = styles.optionText;
                 let icon = null;
 
                 if (showStatus) {
