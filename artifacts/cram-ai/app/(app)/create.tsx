@@ -21,6 +21,9 @@ import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { supabase } from '@/lib/supabase';
 import { setBaseUrl } from '@workspace/api-client-react';
+import { useAchievements } from '@/hooks/useAchievements';
+import { useStreak } from '@/hooks/useStreak';
+import { XP_REWARDS } from '@/lib/gamification';
 
 // Set API base URL
 if (process.env.EXPO_PUBLIC_DOMAIN) {
@@ -33,7 +36,7 @@ type Step = 'idle' | 'generating' | 'saving';
 
 const STEP_LABELS: Record<Step, string> = {
   idle: 'Generate with AI',
-  generating: 'Generating flashcards...',
+  generating: 'AI is building your master deck… (may take up to 30s)',
   saving: 'Saving to your library...',
 };
 
@@ -43,24 +46,30 @@ export default function CreateDeckScreen() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const styles = makeStyles(colors, insets);
+  const { logProgress } = useAchievements();
+  const { incrementStreakAsync } = useStreak();
 
   const [title, setTitle] = useState('');
   const [notes, setNotes] = useState('');
   const [step, setStep] = useState<Step>('idle');
+  const [error, setError] = useState<string | null>(null);
 
   const isLoading = step !== 'idle';
 
   const handleGenerate = async () => {
     if (!title.trim()) {
-      Alert.alert('Missing title', 'Please enter a deck title.');
+      const msg = 'Please enter a deck title.';
+      setError(msg);
+      if (Platform.OS === 'web') window.alert(msg);
+      else Alert.alert('Missing title', msg);
       return;
     }
-    if (notes.trim().length < 50) {
-      Alert.alert('Notes too short', 'Please paste at least a few sentences of lecture notes.');
+    if (!user) {
+      setError('User session expired. Please sign in again.');
       return;
     }
-    if (!user) return;
 
+    setError(null);
     Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
     setStep('generating');
 
@@ -68,11 +77,11 @@ export default function CreateDeckScreen() {
       // Call backend to generate flashcards with Gemini
       const apiBase = process.env.EXPO_PUBLIC_DOMAIN
         ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
-        : '';
+        : (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080');
       const res = await fetch(`${apiBase}/api/generate`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: notes }),
+        body: JSON.stringify({ topic: title.trim(), text: notes.trim() }),
       });
 
       if (!res.ok) {
@@ -107,6 +116,10 @@ export default function CreateDeckScreen() {
       const { error: cardsError } = await supabase.from('flashcards').insert(cardRows);
       if (cardsError) throw cardsError;
 
+      // Gamification: Log Deck Creation and update streak
+      await logProgress({ type: 'deck', xp: XP_REWARDS.DECK_CREATED });
+      await incrementStreakAsync();
+
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
       await queryClient.invalidateQueries({ queryKey: ['decks', user.id] });
 
@@ -117,7 +130,12 @@ export default function CreateDeckScreen() {
     } catch (err: unknown) {
       setStep('idle');
       const message = err instanceof Error ? err.message : 'Something went wrong';
-      Alert.alert('Generation failed', message);
+      setError(message);
+      if (Platform.OS === 'web') {
+        window.alert(`Generation failed: ${message}`);
+      } else {
+        Alert.alert('Generation failed', message);
+      }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
     }
   };
@@ -129,7 +147,7 @@ export default function CreateDeckScreen() {
         <Pressable onPress={() => router.back()} hitSlop={10} style={styles.backBtn}>
           <Ionicons name="arrow-back" size={22} color={colors.foreground} />
         </Pressable>
-        <Text style={styles.headerTitle}>New Deck</Text>
+        <Text style={styles.headerTitle}>Create Study Deck</Text>
         <View style={{ width: 40 }} />
       </View>
 
@@ -140,29 +158,33 @@ export default function CreateDeckScreen() {
         bottomOffset={20}
         showsVerticalScrollIndicator={false}
       >
-        {/* Deck title */}
+        {/* Topic */}
         <View style={styles.section}>
-          <Text style={styles.label}>Deck Title</Text>
+          <Text style={styles.label}>Topic</Text>
+          <Text style={styles.labelSub}>Enter the subject you want to study</Text>
           <TextInput
             style={styles.titleInput}
-            placeholder="e.g. Organic Chemistry Ch.4"
+            placeholder="e.g. Photosynthesis, World War II, Quantum Physics..."
             placeholderTextColor={colors.mutedForeground}
             value={title}
             onChangeText={setTitle}
-            maxLength={80}
+            maxLength={100}
             editable={!isLoading}
           />
         </View>
 
-        {/* Notes */}
+        {/* Detailed Explanation */}
         <View style={styles.section}>
           <View style={styles.labelRow}>
-            <Text style={styles.label}>Lecture Notes</Text>
+            <View>
+              <Text style={styles.label}>Detailed Explanation</Text>
+              <Text style={styles.labelSub}>Optional — the more detail, the smarter the questions</Text>
+            </View>
             <Text style={styles.charCount}>{notes.length} chars</Text>
           </View>
           <TextInput
             style={styles.notesInput}
-            placeholder="Paste your lecture notes, textbook excerpts, or any study material here. The more content, the better the flashcards."
+            placeholder="Explain the topic in detail — include definitions, examples, mechanisms, or any study material. AI will generate 10 smart questions from this."
             placeholderTextColor={colors.mutedForeground}
             value={notes}
             onChangeText={setNotes}
@@ -172,11 +194,30 @@ export default function CreateDeckScreen() {
           />
         </View>
 
+        {/* Error Box */}
+        {error ? (
+          <View style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            gap: 8,
+            backgroundColor: '#2A1515',
+            borderRadius: 12,
+            padding: 12,
+            borderWidth: 1,
+            borderColor: '#4A2020',
+          }}>
+            <Ionicons name="alert-circle" size={16} color={colors.destructive} />
+            <Text style={{ flex: 1, fontSize: 13, color: colors.destructive, fontFamily: 'Inter_400Regular' }}>
+              {error}
+            </Text>
+          </View>
+        ) : null}
+
         {/* AI tip */}
         <View style={styles.tipBox}>
-          <Ionicons name="information-circle" size={16} color={colors.accent} />
+          <Ionicons name="flash" size={16} color={colors.accent} />
           <Text style={styles.tipText}>
-            Gemini AI will extract key concepts and create Q&A flashcard pairs automatically.
+            AI generates 10 master-level flashcards tailored to your topic — coding, history, science, politics, and more. Typos in your topic are auto-corrected. Generation may take up to 30 seconds.
           </Text>
         </View>
 
@@ -266,6 +307,13 @@ function makeStyles(
       fontSize: 13,
       fontFamily: 'Inter_600SemiBold',
       color: colors.foreground,
+    },
+    labelSub: {
+      fontSize: 11,
+      fontFamily: 'Inter_400Regular',
+      color: colors.mutedForeground,
+      marginTop: 2,
+      marginBottom: 6,
     },
     charCount: {
       fontSize: 11,

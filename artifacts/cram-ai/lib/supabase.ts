@@ -46,7 +46,18 @@ export type FlashcardRow = {
   deck_id: string;
   question: string;
   answer: string;
+  next_review_date: string;
+  interval: number;
+  ease_factor: number;
   created_at: string;
+};
+
+export type StudySession = {
+  id: string;
+  user_id: string;
+  duration_minutes: number;
+  type: 'study' | 'break';
+  completed_at: string;
 };
 
 export const isConfigured =

@@ -21,9 +21,10 @@ import { AuthProvider } from '@/context/AuthContext';
 SplashScreen.preventAutoHideAsync();
 
 // Set API base URL for all generated hooks
-if (process.env.EXPO_PUBLIC_DOMAIN) {
-  setBaseUrl(`https://${process.env.EXPO_PUBLIC_DOMAIN}`);
-}
+const apiBaseUrl = process.env.EXPO_PUBLIC_DOMAIN
+  ? `https://${process.env.EXPO_PUBLIC_DOMAIN}`
+  : (process.env.EXPO_PUBLIC_API_URL || 'http://localhost:8080');
+setBaseUrl(apiBaseUrl);
 
 const queryClient = new QueryClient();
 

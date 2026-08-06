@@ -1,6 +1,7 @@
 import React, { useCallback } from 'react';
 import {
   ActivityIndicator,
+  Alert,
   FlatList,
   Platform,
   Pressable,
@@ -18,12 +19,17 @@ import { Ionicons } from '@expo/vector-icons';
 import { useColors } from '@/hooks/useColors';
 import { useAuth } from '@/context/AuthContext';
 import { supabase, type Deck } from '@/lib/supabase';
+import { useStreak } from '@/hooks/useStreak';
+import { useAchievements } from '@/hooks/useAchievements';
 
 export default function HomeScreen() {
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const { user, signOut } = useAuth();
   const styles = makeStyles(colors, insets);
+  
+  const { data: streak } = useStreak();
+  const { levelStats } = useAchievements();
 
   const {
     data: decks,
@@ -58,10 +64,46 @@ export default function HomeScreen() {
     router.push({ pathname: '/(app)/player', params: { deckId: deck.id, title: deck.title } });
   }, []);
 
+  const handleDeleteDeck = useCallback(
+    (deck: Deck) => {
+      const confirmDelete = async () => {
+        try {
+          const { error } = await supabase.from('decks').delete().eq('id', deck.id);
+          if (error) throw error;
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+          refetch();
+        } catch (err: unknown) {
+          const msg = err instanceof Error ? err.message : 'Failed to delete deck';
+          if (Platform.OS === 'web') {
+            window.alert(msg);
+          } else {
+            Alert.alert('Error', msg);
+          }
+        }
+      };
+
+      if (Platform.OS === 'web') {
+        if (window.confirm(`Delete "${deck.title}"?`)) {
+          confirmDelete();
+        }
+      } else {
+        Alert.alert(
+          'Delete Deck',
+          `Are you sure you want to delete "${deck.title}"?`,
+          [
+            { text: 'Cancel', style: 'cancel' },
+            { text: 'Delete', style: 'destructive', onPress: confirmDelete },
+          ],
+        );
+      }
+    },
+    [refetch],
+  );
+
   const renderDeck = useCallback(
     ({ item }: { item: Deck }) => (
       <Pressable
-        style={({ pressed }) => [styles.deckCard, pressed && { opacity: 0.75 }]}
+        style={({ pressed }) => [styles.deckCard, pressed && { opacity: 0.85 }]}
         onPress={() => handleDeckPress(item)}
       >
         <View style={styles.deckIconWrap}>
@@ -86,10 +128,20 @@ export default function HomeScreen() {
             })}
           </Text>
         </View>
+        <Pressable
+          onPress={(e) => {
+            e.stopPropagation();
+            handleDeleteDeck(item);
+          }}
+          hitSlop={10}
+          style={{ padding: 6 }}
+        >
+          <Ionicons name="trash-outline" size={18} color={colors.mutedForeground} />
+        </Pressable>
         <Ionicons name="chevron-forward" size={18} color={colors.mutedForeground} />
       </Pressable>
     ),
-    [styles, colors, handleDeckPress],
+    [styles, colors, handleDeckPress, handleDeleteDeck],
   );
 
   const email = user?.email ?? '';
@@ -106,9 +158,14 @@ export default function HomeScreen() {
           <Text style={styles.greeting}>{greeting}</Text>
           <Text style={styles.subtitle}>Ready to study?</Text>
         </View>
-        <Pressable onPress={handleSignOut} hitSlop={10} style={styles.signOutBtn}>
-          <Ionicons name="log-out-outline" size={22} color={colors.mutedForeground} />
-        </Pressable>
+        <View style={{ flexDirection: 'row', gap: 12 }}>
+          <Pressable onPress={() => router.push('/(app)/timer')} hitSlop={10} style={styles.signOutBtn}>
+            <Ionicons name="timer-outline" size={22} color={colors.accent} />
+          </Pressable>
+          <Pressable onPress={handleSignOut} hitSlop={10} style={styles.signOutBtn}>
+            <Ionicons name="log-out-outline" size={22} color={colors.mutedForeground} />
+          </Pressable>
+        </View>
       </View>
 
       {/* Stats bar */}
@@ -119,9 +176,30 @@ export default function HomeScreen() {
         </View>
         <View style={styles.statDivider} />
         <View style={styles.statItem}>
-          <Ionicons name="flash" size={18} color={colors.accent} />
-          <Text style={styles.statLabel}>AI-Powered</Text>
+          <Text style={styles.statNumber}>🔥 {streak?.current_streak ?? 0}</Text>
+          <Text style={styles.statLabel}>Streak</Text>
         </View>
+        <View style={styles.statDivider} />
+        <View style={styles.statItem}>
+          <Text style={styles.statNumber}>⭐ {levelStats.level}</Text>
+          <Text style={styles.statLabel}>Level</Text>
+        </View>
+      </View>
+
+      {/* Gamification Nav Row */}
+      <View style={styles.navRow}>
+        <Pressable style={styles.navBtn} onPress={() => router.push('/(app)/progress')}>
+          <Ionicons name="bar-chart-outline" size={20} color={colors.primary} />
+          <Text style={[styles.navBtnText, { color: colors.foreground }]}>Progress</Text>
+        </Pressable>
+        <Pressable style={styles.navBtn} onPress={() => router.push('/(app)/planner')}>
+          <Ionicons name="calendar-outline" size={20} color={colors.primary} />
+          <Text style={[styles.navBtnText, { color: colors.foreground }]}>Planner</Text>
+        </Pressable>
+        <Pressable style={styles.navBtn} onPress={() => router.push('/(app)/badges')}>
+          <Ionicons name="medal-outline" size={20} color={colors.primary} />
+          <Text style={[styles.navBtnText, { color: colors.foreground }]}>Badges</Text>
+        </Pressable>
       </View>
 
       {/* Deck list */}
@@ -220,15 +298,37 @@ function makeStyles(
     statsBar: {
       flexDirection: 'row',
       alignItems: 'center',
+      justifyContent: 'space-between',
       marginHorizontal: 24,
-      marginBottom: 24,
+      marginBottom: 16,
       backgroundColor: colors.card,
       borderRadius: 14,
       borderWidth: 1,
       borderColor: colors.border,
       paddingVertical: 14,
       paddingHorizontal: 20,
-      gap: 16,
+    },
+    navRow: {
+      flexDirection: 'row',
+      marginHorizontal: 24,
+      marginBottom: 24,
+      gap: 12,
+    },
+    navBtn: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 10,
+    },
+    navBtnText: {
+      fontFamily: 'Inter_500Medium',
+      fontSize: 13,
     },
     statItem: {
       flexDirection: 'row',

@@ -31,6 +31,9 @@ CREATE TABLE public.flashcards (
   deck_id     UUID NOT NULL REFERENCES public.decks(id) ON DELETE CASCADE,
   question    TEXT NOT NULL,
   answer      TEXT NOT NULL,
+  next_review_date TIMESTAMPTZ DEFAULT now() NOT NULL,
+  interval    INTEGER DEFAULT 0 NOT NULL,
+  ease_factor REAL DEFAULT 2.5 NOT NULL,
   created_at  TIMESTAMPTZ DEFAULT now() NOT NULL
 );
 
@@ -69,3 +72,26 @@ CREATE POLICY "Users can delete flashcards for their decks"
 -- ============================================================
 -- Done! Now add your Supabase URL and Anon Key to Replit Secrets.
 -- ============================================================
+
+-- 3. STUDY SESSIONS (Pomodoro Tracker)
+CREATE TABLE public.study_sessions (
+  id          UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  user_id     UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  duration_minutes INTEGER NOT NULL,
+  type        TEXT NOT NULL CHECK (type IN ('study', 'break')),
+  completed_at TIMESTAMPTZ DEFAULT now() NOT NULL
+);
+
+ALTER TABLE public.study_sessions ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Users can view their own study sessions"
+  ON public.study_sessions FOR SELECT
+  USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can insert their own study sessions"
+  ON public.study_sessions FOR INSERT
+  WITH CHECK (auth.uid() = user_id);
+
+CREATE POLICY "Users can delete their own study sessions"
+  ON public.study_sessions FOR DELETE
+  USING (auth.uid() = user_id);

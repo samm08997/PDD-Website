@@ -28,16 +28,56 @@ export default function PlayerScreen() {
   const { data: cards, isLoading, error } = useQuery<FlashcardRow[]>({
     queryKey: ['flashcards', deckId],
     queryFn: async () => {
-      const { data, err } = await supabase
+      const { data, error: err } = await supabase
         .from('flashcards')
         .select('*')
         .eq('deck_id', deckId)
-        .order('created_at', { ascending: true }) as unknown as { data: FlashcardRow[]; err: unknown };
+        .order('created_at', { ascending: true });
       if (err) throw err;
       return data ?? [];
     },
     enabled: !!deckId,
   });
+
+  const total = cards?.length ?? 0;
+
+  const handleRateCard = async (rating: 'hard' | 'good' | 'easy', cardId: string) => {
+    const card = cards?.find(c => c.id === cardId);
+    if (!card) return;
+
+    let quality = 0;
+    if (rating === 'hard') quality = 1;
+    if (rating === 'good') quality = 3;
+    if (rating === 'easy') quality = 5;
+
+    // SM-2 Spaced Repetition Algorithm
+    let newInterval = card.interval || 0;
+    let newEase = card.ease_factor || 2.5;
+
+    if (quality < 3) {
+      newInterval = 1; // Reset on hard
+    } else {
+      if (newInterval === 0) newInterval = 1;
+      else if (newInterval === 1) newInterval = 6;
+      else newInterval = Math.round(newInterval * newEase);
+    }
+
+    newEase = newEase + (0.1 - (5 - quality) * (0.08 + (5 - quality) * 0.02));
+    if (newEase < 1.3) newEase = 1.3;
+
+    const nextReviewDate = new Date();
+    nextReviewDate.setDate(nextReviewDate.getDate() + newInterval);
+
+    try {
+      await supabase.from('flashcards').update({
+        interval: newInterval,
+        ease_factor: newEase,
+        next_review_date: nextReviewDate.toISOString(),
+      }).eq('id', cardId);
+    } catch (e) {
+      console.error("Failed to update spaced repetition", e);
+    }
+  };
 
   const handlePrev = () => {
     if (currentIndex > 0) {
@@ -54,7 +94,7 @@ export default function PlayerScreen() {
   };
 
   const currentCard = cards?.[currentIndex];
-  const total = cards?.length ?? 0;
+  const progress = total > 0 ? (currentIndex + 1) / total : 0;
 
   return (
     <View style={styles.root}>
@@ -66,7 +106,13 @@ export default function PlayerScreen() {
         <Text style={styles.headerTitle} numberOfLines={1}>
           {title}
         </Text>
-        <View style={{ width: 40 }} />
+        <Pressable 
+          onPress={() => router.push({ pathname: '/(app)/quiz', params: { deckId, title } })} 
+          hitSlop={10} 
+          style={styles.backBtn}
+        >
+          <Ionicons name="school-outline" size={20} color={colors.accent} />
+        </Pressable>
       </View>
 
       {isLoading ? (
@@ -86,23 +132,22 @@ export default function PlayerScreen() {
         </View>
       ) : (
         <View style={styles.playerBody}>
-          {/* Progress */}
+          {/* Progress bar */}
           <View style={styles.progressWrap}>
             <View style={styles.progressTrack}>
-              <View
-                style={[
-                  styles.progressFill,
-                  { width: `${((currentIndex + 1) / total) * 100}%` },
-                ]}
-              />
+              <View style={[styles.progressFill, { width: `${progress * 100}%` as `${number}%` }]} />
             </View>
-            <Text style={styles.progressLabel}>
-              {currentIndex + 1} / {total}
-            </Text>
+            <Text style={styles.progressLabel}>{currentIndex + 1} / {total}</Text>
           </View>
 
-          {/* Tap hint */}
-          <Text style={styles.tapHint}>Tap card to reveal answer</Text>
+          {/* Swipe instruction (mobile only) */}
+          {Platform.OS !== 'web' && (
+            <View style={styles.swipeHintRow}>
+              <Ionicons name="arrow-back" size={12} color={colors.mutedForeground} />
+              <Text style={styles.swipeHintText}>Swipe to navigate • Tap to flip</Text>
+              <Ionicons name="arrow-forward" size={12} color={colors.mutedForeground} />
+            </View>
+          )}
 
           {/* Flash Card */}
           {currentCard ? (
@@ -110,10 +155,13 @@ export default function PlayerScreen() {
               key={`${currentCard.id}-${currentIndex}`}
               question={currentCard.question}
               answer={currentCard.answer}
+              onSwipeLeft={currentIndex < total - 1 ? handleNext : undefined}
+              onSwipeRight={currentIndex > 0 ? handlePrev : undefined}
+              onRate={(rating) => handleRateCard(rating, currentCard.id)}
             />
           ) : null}
 
-          {/* Navigation */}
+          {/* Navigation buttons (always show, especially for web) */}
           <View style={styles.navRow}>
             <Pressable
               style={({ pressed }) => [
@@ -131,14 +179,12 @@ export default function PlayerScreen() {
               />
             </Pressable>
 
-            {/* Center badge */}
+            {/* Center: Card count badge */}
             <LinearGradient
               colors={['#1E2040', '#252850']}
               style={styles.indexBadge}
             >
-              <Text style={styles.indexText}>
-                Card {currentIndex + 1}
-              </Text>
+              <Text style={styles.indexText}>Card {currentIndex + 1}</Text>
             </LinearGradient>
 
             <Pressable
@@ -161,8 +207,8 @@ export default function PlayerScreen() {
           {/* Completion message */}
           {currentIndex === total - 1 && (
             <View style={styles.doneBox}>
-              <Ionicons name="checkmark-circle" size={18} color={colors.accent} />
-              <Text style={styles.doneText}>You've reviewed all cards!</Text>
+              <Ionicons name="checkmark-circle" size={18} color="#A855F7" />
+              <Text style={styles.doneText}>You've reviewed all {total} cards! 🎉</Text>
             </View>
           )}
         </View>
@@ -170,6 +216,8 @@ export default function PlayerScreen() {
     </View>
   );
 }
+
+
 
 function makeStyles(
   colors: ReturnType<typeof import('@/hooks/useColors').useColors>,
@@ -226,9 +274,9 @@ function makeStyles(
     },
     playerBody: {
       flex: 1,
-      paddingHorizontal: 24,
+      paddingHorizontal: 28,
       paddingBottom: insets.bottom + 24 + webBottomPad,
-      gap: 16,
+      gap: 18,
     },
     progressWrap: {
       flexDirection: 'row',
@@ -237,15 +285,15 @@ function makeStyles(
     },
     progressTrack: {
       flex: 1,
-      height: 4,
+      height: 5,
       backgroundColor: colors.secondary,
-      borderRadius: 2,
+      borderRadius: 3,
       overflow: 'hidden',
     },
     progressFill: {
       height: '100%',
       backgroundColor: colors.primary,
-      borderRadius: 2,
+      borderRadius: 3,
     },
     progressLabel: {
       fontSize: 12,
@@ -254,7 +302,13 @@ function makeStyles(
       minWidth: 40,
       textAlign: 'right',
     },
-    tapHint: {
+    swipeHintRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+    },
+    swipeHintText: {
       textAlign: 'center',
       fontSize: 12,
       fontFamily: 'Inter_400Regular',
@@ -276,7 +330,7 @@ function makeStyles(
       borderColor: colors.border,
     },
     navBtnDisabled: {
-      opacity: 0.4,
+      opacity: 0.35,
     },
     indexBadge: {
       paddingHorizontal: 20,
@@ -297,14 +351,14 @@ function makeStyles(
       gap: 8,
       backgroundColor: '#1A0F30',
       borderRadius: 12,
-      padding: 12,
+      padding: 14,
       borderWidth: 1,
       borderColor: '#2D1F50',
     },
     doneText: {
-      fontSize: 13,
+      fontSize: 14,
       fontFamily: 'Inter_500Medium',
-      color: colors.accent,
+      color: '#A855F7',
     },
   });
 }

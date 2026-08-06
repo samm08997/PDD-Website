@@ -18,7 +18,10 @@ import { useColors } from '@/hooks/useColors';
 import { supabase } from '@/lib/supabase';
 import { Ionicons } from '@expo/vector-icons';
 
+import { useRouter } from 'expo-router';
+
 export default function LoginScreen() {
+  const router = useRouter();
   const colors = useColors();
   const insets = useSafeAreaInsets();
   const [isSignUp, setIsSignUp] = useState(false);
@@ -50,6 +53,7 @@ export default function LoginScreen() {
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email, password });
         if (error) throw error;
+        router.replace('/(app)/home');
       }
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (err: unknown) {
