@@ -23,7 +23,7 @@ jobs:
       - name: Install pnpm
         uses: pnpm/action-setup@v3
         with:
-          version: 8
+          version: 9
 
       # 1. Setup E2E Testing Directory
       - name: Install E2E Web Dependencies
