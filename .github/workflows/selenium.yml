@@ -1,0 +1,126 @@
+name: E2E Selenium Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  selenium-test:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v3
+      with:
+        version: 9
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'pnpm'
+
+    - name: Install Root Dependencies
+      run: pnpm install --no-frozen-lockfile
+
+    - name: Build Root Project
+      run: pnpm run build
+
+    - name: Install Selenium Testing Dependencies
+      run: |
+        cd testing
+        npm install
+
+    - name: Create Dummy .env File
+      run: |
+        echo "PORT=8080" > .env
+        echo "GROQ_API_KEY=dummy_key" >> .env
+        echo "EXPO_PUBLIC_API_URL=http://localhost:8080" >> .env
+
+    - name: Start Backend Server
+      run: |
+        cd artifacts/api-server
+        nohup pnpm run start > ../../backend.log 2>&1 &
+
+    - name: Wait for Backend (8080) to be Ready
+      run: |
+        python -c "
+        import socket, time
+        port = 8080
+        start_time = time.time()
+        while True:
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(1)
+                s.connect(('127.0.0.1', port))
+                s.close()
+                print(f'API Port {port} is open and ready.')
+                break
+            except Exception:
+                if time.time() - start_time > 60:
+                    raise TimeoutError(f'Timed out waiting for port {port}')
+                print(f'Waiting for port {port}...')
+                time.sleep(2)
+        "
+
+    - name: Start Frontend Server (Expo Web)
+      run: |
+        cd artifacts/cram-ai
+        # Run expo in web mode, detached
+        nohup npx expo start --web --port 8081 > ../../frontend.log 2>&1 &
+
+    - name: Wait for Frontend (8081) to be Ready
+      run: |
+        python -c "
+        import socket, time
+        port = 8081
+        start_time = time.time()
+        while True:
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(1)
+                s.connect(('127.0.0.1', port))
+                s.close()
+                print(f'Frontend Port {port} is open and ready.')
+                break
+            except Exception:
+                if time.time() - start_time > 60:
+                    raise TimeoutError(f'Timed out waiting for port {port}')
+                print(f'Waiting for port {port}...')
+                time.sleep(2)
+        "
+
+    - name: Install Chrome and ChromeDriver
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y google-chrome-stable
+
+    - name: Run E2E Selenium Web Tests
+      env:
+        HEADLESS: "true"
+        TEST_URL: "http://localhost:8081"
+        DEMO_EMAIL: ${{ secrets.DEMO_EMAIL }}
+        DEMO_PASSWORD: ${{ secrets.DEMO_PASSWORD }}
+      run: |
+        cd testing
+        npm run test:web
+
+    - name: Upload Selenium Test Reports
+      uses: actions/upload-artifact@v4
+      if: always()
+      with:
+        name: selenium-test-reports
+        path: testing/reports/
+
+    - name: Dump Server Logs (On Failure)
+      if: failure()
+      run: |
+        echo "=== BACKEND LOGS ==="
+        cat backend.log || true
+        echo "=== FRONTEND LOGS ==="
+        cat frontend.log || true
