@@ -1,0 +1,93 @@
+name: OWASP ZAP Vulnerability Scan
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  zap-scan:
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout Code
+      uses: actions/checkout@v4
+
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v3
+      with:
+        version: 9
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'pnpm'
+
+    - name: Install Dependencies
+      run: pnpm install
+
+    - name: Build Project
+      run: pnpm run build
+
+    - name: Create Dummy .env File
+      run: |
+        echo "PORT=8080" > .env
+        echo "GROQ_API_KEY=dummy_key" >> .env
+
+    - name: Start Backend Server
+      run: |
+        cd artifacts/api-server
+        nohup pnpm run start > ../../backend.log 2>&1 &
+
+    - name: Wait for API to be Ready
+      run: |
+        python -c "
+        import socket, time
+        port = 8080
+        start_time = time.time()
+        while True:
+            try:
+                s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                s.settimeout(1)
+                s.connect(('127.0.0.1', port))
+                s.close()
+                print(f'API Port {port} is open and ready.')
+                break
+            except Exception:
+                if time.time() - start_time > 60:
+                    raise TimeoutError(f'Timed out waiting for port {port}')
+                print(f'Waiting for port {port}...')
+                time.sleep(2)
+        "
+
+    - name: Pull OWASP ZAP Docker Image
+      run: |
+        docker pull -q zaproxy/zap-stable:latest
+
+    - name: Run OWASP ZAP Baseline Scan
+      run: |
+        mkdir -p zap-reports
+        # Run ZAP scan using host network to access localhost on runner
+        docker run --user root --network="host" -v $(pwd)/zap-reports:/zap/wrk/:rw -t zaproxy/zap-stable:latest zap-baseline.py -t http://localhost:8080/api/healthz -r zap_report.html || true
+        # Make sure report was created
+        ls -la zap-reports
+
+    - name: Upload ZAP Scan Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: owasp-zap-report
+        path: zap-reports/zap_report.html
+
+    - name: Dump Backend Server Logs (On Failure)
+      if: always()
+      run: |
+        echo "========================================================="
+        echo "                DETAILED BACKEND LOGS                    "
+        echo "========================================================="
+        if [ -f backend.log ]; then
+          cat backend.log
+        else
+          echo "backend.log not found"
+        fi
