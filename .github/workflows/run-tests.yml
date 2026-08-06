@@ -30,10 +30,10 @@ jobs:
         working-directory: ./e2e-tests
         run: pnpm install
 
-      # 2. Setup Mobile Appium Directory
+      # 2. Setup Mobile Testing Directory
       - name: Install Mobile Appium Dependencies
-        working-directory: ./artifacts/cram-ai/appium-tests
-        run: pnpm install
+        working-directory: ./app/appium-tests
+        run: npm install
 
       # 3. Execute Selenium Web Tests
       - name: Run Selenium Web Tests
@@ -47,17 +47,15 @@ jobs:
 
       # 5. Execute Comprehensive Appium Mobile Tests
       - name: Run Appium Mobile Screen Tests
-        working-directory: ./artifacts/cram-ai/appium-tests
+        working-directory: ./app/appium-tests
         run: npx mocha tests/mobile_screens.spec.js || true
 
       # 6. Upload All Test Reports as GitHub Artifacts
       - name: Upload Test Reports
         uses: actions/upload-artifact@v4
         with:
-          name: all-test-reports
+          name: Full-Test-Reports
           path: |
-            e2e-tests/reports/*.xlsx
-            e2e-tests/reports/*.html
-            e2e-tests/reports/*.json
-            artifacts/cram-ai/appium-tests/reports/*.xlsx
+            e2e-tests/reports/
+            app/appium-tests/reports/*.xlsx
           retention-days: 14

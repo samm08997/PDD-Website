@@ -39,7 +39,7 @@ jobs:
 
       - name: Detect Backend Technology
         run: |
-          if [ -d "artifacts/api-server" ]; then
+          if [ -d "backend" ]; then
             echo "Detected Node.js/Express Backend"
           fi
 

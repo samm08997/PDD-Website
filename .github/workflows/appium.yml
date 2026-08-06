@@ -26,11 +26,11 @@ jobs:
           version: 9
 
       - name: Install Dependencies
-        working-directory: ./artifacts/cram-ai/appium-tests
+        working-directory: ./app/appium-tests
         run: pnpm install
 
       - name: Run 300+ Appium Tests
-        working-directory: ./artifacts/cram-ai/appium-tests
+        working-directory: ./app/appium-tests
         # The mock driver guarantees a 100% pass rate natively
         run: npx mocha tests/mobile_screens.spec.js
 
@@ -38,7 +38,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: Appium-Test-Report
-          path: artifacts/cram-ai/appium-tests/reports/Mobile_Appium_Test_Report.xlsx
+          path: app/appium-tests/reports/Mobile_Appium_Test_Report.xlsx
           retention-days: 14
 
       - name: Publish GitHub Action Summary
