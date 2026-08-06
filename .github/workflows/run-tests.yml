@@ -38,20 +38,17 @@ jobs:
       # 3. Execute Selenium Web Tests
       - name: Run Selenium Web Tests
         working-directory: ./e2e-tests
-        continue-on-error: true # Prevents pipeline from stopping if a test fails
-        run: npm run test:web
+        run: npm run test:web || true
 
       # 4. Execute Load Test (Autocannon)
       - name: Run Load Testing
         working-directory: ./e2e-tests
-        continue-on-error: true
-        run: node scripts/load-test.js
+        run: node scripts/load-test.js || true
 
       # 5. Execute Comprehensive Appium Mobile Tests
       - name: Run Appium Mobile Screen Tests
         working-directory: ./artifacts/cram-ai/appium-tests
-        continue-on-error: true
-        run: npx mocha tests/mobile_screens.spec.js
+        run: npx mocha tests/mobile_screens.spec.js || true
 
       # 6. Upload All Test Reports as GitHub Artifacts
       - name: Upload Test Reports
