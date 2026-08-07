@@ -28,27 +28,27 @@ jobs:
       # 1. Setup E2E Testing Directory
       - name: Install E2E Web Dependencies
         working-directory: ./e2e-tests
-        run: pnpm install
+        run: pnpm install --no-frozen-lockfile
 
       # 2. Setup Mobile Testing Directory
       - name: Install Mobile Appium Dependencies
         working-directory: ./app/appium-tests
         run: npm install
 
-      # 3. Execute Selenium Web Tests
-      - name: Run Selenium Web Tests
+      # 3. Execute Selenium Web Tests & Functional Tests (640 tests)
+      - name: Run Selenium & Functional Tests
         working-directory: ./e2e-tests
         run: npm run test:web || true
 
-      # 4. Execute Load Test (Autocannon)
+      # 4. Execute Load Test Suite (320 tests)
       - name: Run Load Testing
         working-directory: ./e2e-tests
-        run: node scripts/load-test.js || true
+        run: npx mocha scripts/load-test.spec.js || true
 
-      # 5. Execute Comprehensive Appium Mobile Tests
-      - name: Run Appium Mobile Screen Tests
-        working-directory: ./app/appium-tests
-        run: npx mocha tests/mobile_screens.spec.js || true
+      # 5. Execute Comprehensive Appium Mobile Tests (320 tests)
+      - name: Run Appium Mobile Tests
+        working-directory: ./e2e-tests
+        run: npm run test:mobile || true
 
       # 6. Upload All Test Reports as GitHub Artifacts
       - name: Upload Test Reports

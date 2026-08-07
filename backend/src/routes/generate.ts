@@ -1,10 +1,7 @@
 import { Router } from "express";
-import Groq from "groq-sdk";
 
 const router = Router();
-
-// Best free Groq model: llama-3.3-70b-versatile — very smart, very fast
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+const OLLAMA_MODEL = "qwen3:14b";
 
 function buildPrompt(topic: string, notes: string): string {
   const hasNotes = notes && notes.trim().length > 0;
@@ -95,65 +92,44 @@ router.post("/generate", async (req, res) => {
     return;
   }
 
-  const apiKey = process.env["GROQ_API_KEY"];
-  if (!apiKey) {
-    res.status(503).json({ error: "AI is not configured. Please add GROQ_API_KEY to your .env file." });
-    return;
-  }
-
-  const groq = new Groq({ apiKey });
   const prompt = buildPrompt(topicStr || detailsStr, detailsStr || "");
 
   try {
-    req.log.info(`Generating flashcards with Groq (${GROQ_MODEL})...`);
+    req.log.info(`Generating flashcards with Ollama (${OLLAMA_MODEL})...`);
 
-    const completion = await groq.chat.completions.create({
-      model: GROQ_MODEL,
-      messages: [
-        {
-          role: "system",
-          content: "You are an expert AI tutor. You always respond with ONLY a valid JSON array — no markdown, no extra text, no code fences. Every response is a raw JSON array of objects with 'question' (string) and 'answer' (string) keys. Inside answer strings, use \\n for newlines. NEVER use unescaped double-quotes inside string values.",
-        },
-        {
-          role: "user",
-          content: prompt,
-        },
-      ],
-      temperature: 0.75,
-      max_tokens: 8000,
-      response_format: { type: "json_object" },
+    const response = await fetch("http://localhost:11434/api/chat", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: OLLAMA_MODEL,
+        messages: [
+          {
+            role: "system",
+            content: "You are an expert AI tutor. You always respond with ONLY a valid JSON array — no markdown, no extra text, no code fences. Every response is a raw JSON array of objects with 'question' (string) and 'answer' (string) keys. Inside answer strings, use \\n for newlines. NEVER use unescaped double-quotes inside string values.",
+          },
+          {
+            role: "user",
+            content: prompt,
+          },
+        ],
+        stream: false,
+        format: "json",
+      }),
     });
 
-    const responseText = completion.choices[0]?.message?.content?.trim() ?? "";
+    if (!response.ok) {
+      throw new Error(`Ollama API returned status: ${response.status}`);
+    }
+
+    const result = await response.json();
+    const responseText = result.message?.content?.trim() ?? "";
 
     if (!responseText) {
-      throw new Error("Groq returned an empty response");
+      throw new Error("Ollama returned an empty response");
     }
 
-    // Strip markdown fences if present
-    let cleaned = responseText;
-    const fenceMatch = cleaned.match(/```(?:json)?\s*([\s\S]*?)```/);
-    if (fenceMatch) cleaned = fenceMatch[1].trim();
-
-    // If model wrapped it in a JSON object like {"flashcards": [...]}, extract the array
-    if (cleaned.startsWith("{")) {
-      try {
-        const wrapper = JSON.parse(cleaned) as Record<string, unknown>;
-        const inner = Object.values(wrapper).find(Array.isArray);
-        if (inner) cleaned = JSON.stringify(inner);
-      } catch {
-        // fall through to arrayStart extraction
-      }
-    }
-
-    // Ensure it starts with [
-    const arrayStart = cleaned.indexOf("[");
-    if (arrayStart > 0) cleaned = cleaned.slice(arrayStart);
-    // Trim any trailing garbage after the last ]
-    const arrayEnd = cleaned.lastIndexOf("]");
-    if (arrayEnd !== -1 && arrayEnd < cleaned.length - 1) cleaned = cleaned.slice(0, arrayEnd + 1);
-
-    const flashcards = JSON.parse(cleaned);
+    const json = JSON.parse(responseText);
+    const flashcards = Array.isArray(json.flashcards) ? json.flashcards : Array.isArray(json) ? json : [];
 
     if (!Array.isArray(flashcards) || flashcards.length === 0) {
       throw new Error("AI returned empty or non-array response");
@@ -169,15 +145,14 @@ router.post("/generate", async (req, res) => {
 
     if (valid.length === 0) throw new Error("AI returned no valid cards");
 
-    req.log.info(`Groq success — ${valid.length} cards generated`);
+    req.log.info(`Ollama success — ${valid.length} cards generated`);
     res.json({ flashcards: valid.slice(0, 10) });
 
   } catch (err: unknown) {
-    req.log.error({ err }, "Groq API failed");
-    const message =
-      err instanceof Error ? err.message : "AI generation failed";
+    req.log.error({ err }, "Ollama API failed");
+    const message = err instanceof Error ? err.message : "AI generation failed";
     res.status(503).json({
-      error: `AI failed: ${message}. Please check your GROQ_API_KEY and try again.`,
+      error: `AI failed: ${message}. Make sure Ollama is running locally.`,
     });
   }
 });

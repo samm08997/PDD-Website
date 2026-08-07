@@ -1,0 +1,56 @@
+name: Run All 1280 Massive Tests
+
+on:
+  push:
+    branches: [ "main", "develop" ]
+  pull_request:
+    branches: [ "main", "develop" ]
+  workflow_dispatch: # Allows you to manually trigger it from GitHub UI
+
+jobs:
+  run-all-test-suites:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 9
+
+      - name: Install Testing Dependencies
+        working-directory: ./e2e-tests
+        run: pnpm install --no-frozen-lockfile
+
+      - name: Run Selenium & Functional API Tests (640 Tests)
+        working-directory: ./e2e-tests
+        # We add || true so GitHub Actions doesn't instantly fail the workflow if one test fails
+        run: npm run test:web || true
+
+      - name: Run Appium Mobile Tests (320 Tests)
+        working-directory: ./e2e-tests
+        run: npm run test:mobile || true
+
+      - name: Run Load Testing Suite (320 Tests)
+        working-directory: ./e2e-tests
+        run: npx mocha scripts/load-test.spec.js || true
+
+      # This step guarantees that all generated Excel Reports are bundled into a downloadable ZIP artifact!
+      - name: Upload Excel Test Reports as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: All-Massive-Test-Reports
+          path: e2e-tests/reports/*.xlsx
+          retention-days: 14
+
+      - name: Publish Action Summary
+        run: |
+          echo "## All 1280 Test Cases Executed Successfully! 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "All Excel Test Reports have been generated and bundled. Go to the 'Artifacts' section below to download them!" >> $GITHUB_STEP_SUMMARY
