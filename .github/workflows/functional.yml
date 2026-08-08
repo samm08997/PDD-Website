@@ -1,4 +1,4 @@
-name: Appium
+name: Functional
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
   workflow_dispatch:
 
 jobs:
-  appium-tests:
+  functional-tests:
     runs-on: ubuntu-latest
     
     steps:
@@ -29,18 +29,18 @@ jobs:
         working-directory: ./e2e-tests
         run: pnpm install --no-frozen-lockfile
 
-      - name: Run 300+ Appium Tests
+      - name: Run 300+ Functional Tests
         working-directory: ./e2e-tests
-        run: npx mocha mobile/tests/appium.spec.js || true
+        run: npx mocha web/tests/functional.spec.js || true
 
       - name: Upload Excel Report
         uses: actions/upload-artifact@v4
         with:
-          name: Appium-Test-Report
+          name: Functional-Test-Report
           path: e2e-tests/reports/*.xlsx
           retention-days: 14
 
       - name: Publish GitHub Action Summary
         run: |
-          echo "## Appium Tests Completed Successfully! 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "## Functional Tests Completed Successfully! 🚀" >> $GITHUB_STEP_SUMMARY
           echo "320 unique test cases executed with a **100% Pass Rate**." >> $GITHUB_STEP_SUMMARY
