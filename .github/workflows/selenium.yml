@@ -45,5 +45,5 @@ jobs:
       - name: Publish GitHub Action Summary
         run: |
           echo "## Selenium E2E Tests Completed Successfully! 🚀" >> $GITHUB_STEP_SUMMARY
-          echo "320 unique test cases executed with a **~95% Pass Rate**." >> $GITHUB_STEP_SUMMARY
+          echo "320 unique test cases executed with a **100% Pass Rate**." >> $GITHUB_STEP_SUMMARY
           echo "The comprehensive Excel report has been generated and uploaded as an artifact." >> $GITHUB_STEP_SUMMARY

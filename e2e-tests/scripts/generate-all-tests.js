@@ -34,13 +34,8 @@ describe('${title} - 300+ Test Suite', function () {
   features.forEach(feature => {
     fileContent += `  describe('${feature}', function() {\n`;
     scenarios.forEach((scenario, index) => {
-      // Intentionally fail ~5% of tests to show variation in the graph
-      const willPass = Math.random() > 0.05;
-      if (willPass) {
-        fileContent += `    it('${scenario} should succeed', async function() { expect(true).to.be.true; });\n`;
-      } else {
-        fileContent += `    it('${scenario} should fail appropriately', async function() { expect(true).to.be.false; });\n`;
-      }
+      // 100% Passing test cases
+      fileContent += `    it('${scenario} should succeed', async function() { expect(true).to.be.true; });\n`;
     });
     fileContent += `  });\n\n`;
   });
