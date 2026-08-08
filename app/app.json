@@ -17,7 +17,8 @@
       "supportsTablet": false
     },
     "android": {
-      "backgroundColor": "#0A0B0F"
+      "backgroundColor": "#0A0B0F",
+      "package": "com.mirza_1006.cramai"
     },
     "web": {
       "favicon": "./assets/images/icon.png"
@@ -35,6 +36,11 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "eas": {
+        "projectId": "09e18b4d-81c8-4914-8643-93ba52313164"
+      }
     }
   }
 }
